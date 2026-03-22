@@ -61,17 +61,24 @@ def search_codebase(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     
     results = collection.query(
         query_embeddings=[query_embedding],
-        n_results=top_k
+        n_results=top_k,
+        include=["documents", "metadatas", "distances"]
     )
     
     formatted_results = []
     if results.get('documents') and len(results['documents']) > 0:
         docs = results['documents'][0]
         metas = results['metadatas'][0]
+        distances = results.get('distances', [[0]*len(docs)])[0]
         
-        for doc, meta in zip(docs, metas):
+        for doc, meta, dist in zip(docs, metas, distances):
+            # Convert cosine distance to relevance string (heuristic approach)
+            relevance = max(0.0, 1.0 - float(dist))
+            relevance_pct = int(relevance * 100)
+            
             formatted_results.append({
                 "code_snippet": doc,
+                "relevance_score": relevance_pct,
                 **meta
             })
             
