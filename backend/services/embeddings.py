@@ -4,16 +4,25 @@ from core.config import settings
 from db.database import chroma_client
 
 # Initialize ChromaDB local collection using central client
-collection = chroma_client.get_or_create_collection(name="codebase")
+collection = chroma_client.get_or_create_collection(name="codebase", metadata={"hnsw:space": "cosine"})
 
-# Initialize Hugging Face Jina Embedding Model
-# We set trust_remote_code=True as instructed for jina models
-model = SentenceTransformer(settings.EMBEDDING_MODEL, trust_remote_code=True)
+model = None
+
+def get_embedding_model():
+    global model
+    if model is None:
+        import torch
+        print(f"Lazy Loading Embedding Model ({settings.EMBEDDING_MODEL})...")
+        device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
+        model = SentenceTransformer(settings.EMBEDDING_MODEL, trust_remote_code=True, device=device)
+    return model
 
 def index_chunks(chunks: List[Dict[str, Any]]):
     """Embeds and indexes code chunks in ChromaDB."""
     if not chunks:
         return
+        
+    local_model = get_embedding_model()
         
     global collection
     # Clear existing collection by deleting and recreating
@@ -21,7 +30,7 @@ def index_chunks(chunks: List[Dict[str, Any]]):
         chroma_client.delete_collection(name="codebase")
     except Exception:
         pass
-    collection = chroma_client.get_or_create_collection(name="codebase")
+    collection = chroma_client.get_or_create_collection(name="codebase", metadata={"hnsw:space": "cosine"})
     
     # Process the chunks in batches to limit memory usage
     batch_size = 32
@@ -30,8 +39,8 @@ def index_chunks(chunks: List[Dict[str, Any]]):
         texts = [chunk["code_snippet"] for chunk in batch]
         
         # Calculate embeddings
-        # model.encode returns a NumPy array by default, we convert to list
-        embeddings = model.encode(texts).tolist()
+        # local_model.encode returns a NumPy array by default, we convert to list
+        embeddings = local_model.encode(texts).tolist()
         
         # Prepare metadata and IDs for Upsert
         ids = [f"chunk_{i+j}" for j in range(len(batch))]
@@ -53,7 +62,8 @@ def index_chunks(chunks: List[Dict[str, Any]]):
 
 def search_codebase(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     """Searches the ChromaDB codebase for a natural language query."""
-    query_embedding = model.encode(query).tolist()
+    local_model = get_embedding_model()
+    query_embedding = local_model.encode(query).tolist()
     
     results = collection.query(
         query_embeddings=[query_embedding],
