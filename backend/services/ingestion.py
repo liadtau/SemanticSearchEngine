@@ -6,6 +6,7 @@ import tarfile
 from typing import Union
 from pathlib import Path
 from fastapi import UploadFile, HTTPException
+from services.parser import chunk_python_file
 
 def is_safe_path(base_dir: Union[str, Path], target_path: Union[str, Path]) -> bool:
     """Ensure the target path is within the base directory to prevent path traversal."""
@@ -31,7 +32,7 @@ def safe_extract_tar(archive_path: Union[str, Path], target_dir: Union[str, Path
         # Python 3.12+ supports filter='data' but we do manual checks for broader compatibility
         tar_ref.extractall(target_dir)
 
-def process_upload(file: UploadFile) -> int:
+def process_upload(file: UploadFile) -> dict:
     filename = file.filename or ""
     if not (filename.endswith('.zip') or filename.endswith('.tar.gz') or filename.endswith('.tar') or filename.endswith('.tgz')):
         raise HTTPException(status_code=400, detail="Invalid file type. Only .zip and .tar.gz are supported.")
@@ -63,7 +64,7 @@ def process_upload(file: UploadFile) -> int:
             raise HTTPException(status_code=500, detail=f"Error extracting archive: {str(e)}")
 
         # Find all python files, ignoring specific unneeded directories
-        py_files_count = 0
+        py_files = []
         ignore_dirs = {'.git', 'venv', '.tox', '__pycache__', 'env', '.env'}
         
         for root, dirs, files in os.walk(temp_dir_path):
@@ -72,7 +73,14 @@ def process_upload(file: UploadFile) -> int:
             
             for file_name in files:
                 if file_name.endswith('.py'):
-                    py_files_count += 1
+                    py_files.append(os.path.join(root, file_name))
         
-        # Return only the count for this step, but in the future we'd return parsed AST chunks
-        return py_files_count
+        all_chunks = []
+        for py_file in py_files:
+            chunks = chunk_python_file(py_file, str(temp_dir_path))
+            all_chunks.extend(chunks)
+        
+        return {
+            "python_files_discovered": len(py_files),
+            "total_chunks": len(all_chunks)
+        }
