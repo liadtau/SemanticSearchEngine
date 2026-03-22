@@ -7,7 +7,7 @@ sentence-transformers
 chromadb
 torch
 einops
-transformers
+transformers<4.40.0
 accelerate
 pydantic
 httpx
