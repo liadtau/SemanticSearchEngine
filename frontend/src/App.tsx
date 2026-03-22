@@ -1,6 +1,9 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { UploadCloud, Search, Bot, Code, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
 import axios from 'axios'
+import ReactMarkdown from 'react-markdown'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 interface Reference {
   code_snippet: string;
@@ -11,9 +14,10 @@ interface Reference {
   type: string;
 }
 
-interface SearchResponse {
-  agent_message: string;
-  references: Reference[];
+interface Message {
+  role: 'user' | 'agent';
+  content: string;
+  references?: Reference[];
 }
 
 export default function App() {
@@ -24,7 +28,17 @@ export default function App() {
   
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
-  const [response, setResponse] = useState<SearchResponse | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, searching])
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -60,7 +74,6 @@ export default function App() {
     formData.append("file", file)
     
     try {
-      // Since the backend processes immediately in the background, we update message
       setUploadState('processing')
       setUploadMessage('Extracting, Chunking & Embedding...')
       
@@ -81,13 +94,28 @@ export default function App() {
     e.preventDefault()
     if (!query.trim()) return;
     
+    const userQuery = query.trim()
+    setQuery('')
+    setMessages(prev => [...prev, { role: 'user', content: userQuery }])
+    
     setSearching(true);
-    setResponse(null);
     try {
-      const res = await axios.post("http://localhost:8000/api/search", { query })
-      setResponse(res.data)
+      const res = await axios.post("http://localhost:8000/api/search", { query: userQuery })
+      const data = res.data
+      
+      const content = data.agent_message || "Here are the most relevant code snippets I found:"
+      
+      setMessages(prev => [...prev, {
+        role: 'agent',
+        content,
+        references: data.references || (data.results || [])
+      }])
     } catch (e: any) {
-      alert("Error searching the codebase: " + (e.message || 'unknown error'))
+      setMessages(prev => [...prev, { 
+        role: 'agent', 
+        content: `Error searching the codebase: ${e.message || 'unknown error'}`,
+        references: []
+      }])
     } finally {
       setSearching(false)
     }
@@ -96,7 +124,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0A0D14] text-white flex font-sans">
       {/* Sidebar - Ingestion Layout */}
-      <aside className="w-80 border-r border-gray-800/50 bg-[#0F131D] p-6 flex flex-col justify-start">
+      <aside className="w-80 border-r border-gray-800/50 bg-[#0F131D] p-6 flex flex-col justify-start shrink-0">
         <header className="mb-10">
           <h1 className="text-xl font-bold flex items-center gap-3 w-full text-blue-400 tracking-tight">
             <UploadCloud size={24} /> Repository Indexer
@@ -167,92 +195,148 @@ export default function App() {
       </aside>
 
       {/* Main Chat Panel */}
-      <main className="flex-1 flex flex-col h-screen relative bg-gradient-to-br from-[#0A0D14] to-[#0d121c]">
+      <main className="flex-1 flex flex-col h-screen relative bg-gradient-to-br from-[#0A0D14] to-[#0D121C]">
         
+        {/* Chat Header */}
+        <header className="px-8 py-5 border-b border-gray-800/50 bg-[#0F131D]/80 backdrop-blur-md sticky top-0 z-10 shrink-0 flex justify-between items-center">
+          <div>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">
+              Semantic RAG Agent
+            </h1>
+            <p className="text-xs text-gray-400 mt-1 uppercase tracking-wider font-semibold">Conversational Interface</p>
+          </div>
+        </header>
+
         {/* Chat Log History Area */}
-        <div className="flex-1 overflow-y-auto p-10 flex flex-col gap-8 scroll-smooth">
-          {!response && !searching && (
-            <div className="h-full flex flex-col items-center justify-center text-gray-500 gap-6 select-none max-w-md mx-auto text-center">
-              <div className="bg-gray-900/50 p-6 rounded-3xl border border-gray-800/50 shadow-2xl">
-                <Bot size={56} className="text-gray-600 mb-6 mx-auto" />
-                <h3 className="text-xl font-bold text-gray-300 mb-2">Codebase AI RAG Explorer</h3>
-                <p className="text-sm font-medium leading-relaxed">I have a local language model and a semantic vector database. Upload an archive on the left, then ask me anything about your logic.</p>
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col gap-8 scroll-smooth">
+          {messages.length === 0 && !searching && (
+            <div className="h-full flex flex-col items-center justify-center text-gray-500 gap-6 select-none max-w-lg mx-auto text-center m-auto my-auto">
+              <div className="bg-gray-900/30 p-8 rounded-[2rem] border border-gray-800/50 shadow-2xl">
+                <Bot size={64} className="text-blue-500/50 mb-6 mx-auto" />
+                <h3 className="text-xl font-bold text-gray-300 mb-3">Codebase AI RAG Explorer</h3>
+                <p className="text-sm font-medium leading-relaxed text-gray-400">
+                  I am connected to a semantic vector database and local LLM. Upload an archive on the left, then ask me anything about your logic. I will retain the conversation history.
+                </p>
               </div>
             </div>
           )}
 
-          {searching && (
-             <div className="w-full max-w-3xl mx-auto flex gap-4 animate-in fade-in duration-300">
-                <div className="shrink-0"><Bot className="text-blue-500 bg-blue-500/10 p-2.5 rounded-xl border border-blue-500/20 shadow-sm" size={44}/></div>
-                <div className="text-blue-400 animate-pulse flex items-center font-semibold text-lg">
-                  Agents synthesizing semantic vectors...
-                </div>
-            </div>
-          )}
-
-          {response && (
-            <div className="flex flex-col gap-6 w-full max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
-              {/* Query Bubble */}
-              <div className="self-end bg-[#2563eb] text-white px-5 py-3.5 rounded-3xl rounded-tr-sm max-w-[85%] shadow-md">
-                <p className="text-[15px] font-medium leading-snug">{query}</p>
-              </div>
-
-              {/* Agent LLM Reply Bubble */}
-              <div className="self-start w-full">
-                <div className="flex gap-4">
-                  <div className="mt-1 shrink-0"><Bot className="text-gray-300 bg-gray-800 p-2.5 rounded-xl border border-gray-700 shadow-sm" size={44}/></div>
-                  <div className="text-gray-200 leading-relaxed whitespace-pre-wrap text-[15px] font-medium pt-2">
-                    {response.agent_message}
+          <div className="flex flex-col gap-8 w-full max-w-4xl mx-auto pb-4">
+            {messages.map((msg, index) => (
+              <div key={index} className={`flex w-full animate-in fade-in slide-in-from-bottom-2 duration-300 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                {msg.role === 'user' ? (
+                  <div className="bg-blue-600 text-white px-5 py-4 rounded-3xl rounded-tr-sm max-w-[85%] shadow-md">
+                    <p className="text-[15px] font-medium leading-snug whitespace-pre-wrap">{msg.content}</p>
                   </div>
-                </div>
+                ) : (
+                  <div className="w-full">
+                    <div className="flex gap-4 w-full">
+                      <div className="mt-1 shrink-0">
+                        <div className="bg-gray-800 p-2.5 rounded-2xl border border-gray-700 shadow-sm flex items-center justify-center">
+                          <Bot className="text-blue-400" size={24}/>
+                        </div>
+                      </div>
+                      <div className="flex-1 bg-gray-800/40 p-5 rounded-3xl rounded-tl-sm border border-gray-700/50 shadow-sm">
+                        
+                        {/* Agent Message Content using Markdown */}
+                        <div className="prose prose-invert max-w-none text-[15px] font-medium leading-relaxed text-gray-200">
+                          <ReactMarkdown
+                            components={{
+                              code({node, inline, className, children, ...props}: any) {
+                                const match = /language-(\w+)/.exec(className || '')
+                                return !inline && match ? (
+                                  <SyntaxHighlighter
+                                    {...props}
+                                    children={String(children).replace(/\n$/, '')}
+                                    style={vscDarkPlus}
+                                    language={match[1]}
+                                    PreTag="div"
+                                    className="rounded-xl border border-gray-700/50 text-[13px] my-4"
+                                  />
+                                ) : (
+                                  <code {...props} className="bg-gray-800 px-1.5 py-0.5 rounded-md text-blue-300 font-mono text-[13px] border border-gray-700">
+                                    {children}
+                                  </code>
+                                )
+                              }
+                            }}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
+                        </div>
 
-                {/* Vector References */}
-                {response.references.length > 0 && (
-                  <div className="mt-8 ml-[60px] space-y-3">
-                    <h3 className="text-[11px] font-bold text-gray-500 flex items-center gap-1.5 uppercase tracking-wider mb-4">
-                      <Code size={14} /> Retrieved Context
-                    </h3>
-                    <div className="grid grid-cols-1 gap-2.5">
-                      {response.references.map((ref, i) => (
-                        <details key={i} className="group bg-[#111621] border border-gray-800 hover:border-gray-700/70 rounded-2xl overflow-hidden [&_summary::-webkit-details-marker]:hidden transition-all shadow-sm">
-                          <summary className="flex items-center justify-between p-3.5 px-4 cursor-pointer select-none">
-                            <div className="flex items-center gap-3 overflow-hidden pr-4">
-                              <span className="font-mono text-[13px] text-blue-400 font-semibold truncate hover:text-blue-300" title={ref.file_path}>{ref.file_path}</span>
-                              <span className="text-[10px] text-gray-500 font-mono bg-gray-900/80 px-2 py-0.5 rounded-md border border-gray-800 shrink-0">L{ref.start_line}-{ref.end_line}</span>
+                        {/* Vector References */}
+                        {msg.references && msg.references.length > 0 && (
+                          <div className="mt-8 pt-5 border-t border-gray-700/50 space-y-3">
+                            <h3 className="text-[11px] font-bold text-gray-500 flex items-center gap-1.5 uppercase tracking-wider mb-4">
+                              <Code size={14} /> Retrieved Snippets
+                            </h3>
+                            <div className="grid grid-cols-1 gap-2.5">
+                              {msg.references.map((ref, i) => (
+                                <details key={i} className="group bg-[#0A0D14]/80 border border-gray-800 hover:border-gray-700/70 rounded-2xl overflow-hidden [&_summary::-webkit-details-marker]:hidden transition-all shadow-sm">
+                                  <summary className="flex items-center justify-between p-3.5 px-4 cursor-pointer select-none">
+                                    <div className="flex items-center gap-3 overflow-hidden pr-4">
+                                      <span className="font-mono text-[13px] text-blue-400 font-semibold truncate hover:text-blue-300" title={ref.file_path}>
+                                        {ref.file_path}
+                                      </span>
+                                      <span className="text-[10px] text-gray-500 font-mono bg-gray-900/80 px-2 py-0.5 rounded-md border border-gray-800 shrink-0">L{ref.start_line}-{ref.end_line}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                      <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full border ${ref.relevance_score > 80 ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
+                                        Match: {ref.relevance_score}%
+                                      </span>
+                                      <div className="w-5 h-5 rounded-full bg-gray-800 flex items-center justify-center group-open:rotate-180 transition-transform">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                      </div>
+                                    </div>
+                                  </summary>
+                                  <div className="p-0 border-t border-gray-800 overflow-hidden shadow-inner bg-[#0D1117]">
+                                    <SyntaxHighlighter
+                                      language="python"
+                                      style={vscDarkPlus}
+                                      customStyle={{ margin: 0, padding: '1rem', background: 'transparent', fontSize: '13px' }}
+                                    >
+                                      {ref.code_snippet}
+                                    </SyntaxHighlighter>
+                                  </div>
+                                </details>
+                              ))}
                             </div>
-                            <div className="flex items-center gap-3 shrink-0">
-                              <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full border ${ref.relevance_score > 80 ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
-                                Match: {ref.relevance_score}%
-                              </span>
-                              <div className="w-5 h-5 rounded-full bg-gray-800 flex items-center justify-center group-open:rotate-180 transition-transform">
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                              </div>
-                            </div>
-                          </summary>
-                          <div className="p-4 bg-[#0A0D14] border-t border-gray-800 overflow-x-auto shadow-inner">
-                            <pre className="text-[12px] text-emerald-400/90 font-mono leading-relaxed">
-                              <code>{ref.code_snippet}</code>
-                            </pre>
                           </div>
-                        </details>
-                      ))}
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            ))}
+
+            {searching && (
+               <div className="w-full max-w-3xl flex gap-4 animate-in fade-in duration-300 self-start">
+                  <div className="shrink-0">
+                    <div className="bg-gray-800 p-2.5 rounded-2xl border border-gray-700 shadow-sm flex items-center justify-center opacity-70">
+                      <Bot className="text-blue-500" size={24}/>
+                    </div>
+                  </div>
+                  <div className="text-blue-400 animate-pulse flex items-center font-semibold text-sm bg-blue-500/10 px-5 py-3 rounded-2xl border border-blue-500/20 self-start shadow-inner">
+                    <Loader2 size={16} className="animate-spin mr-2"/> Agents synthesizing semantic vectors...
+                  </div>
+              </div>
+            )}
+            
+            <div ref={messagesEndRef} />
+          </div>
         </div>
 
         {/* Bottom Input Area */}
-        <div className="p-6 pb-8 bg-gradient-to-t from-[#0A0D14] via-[#0A0D14] to-transparent shrink-0">
-          <form onSubmit={handleSearch} className="max-w-3xl mx-auto relative group">
+        <div className="p-4 md:p-6 bg-gradient-to-t from-[#0A0D14] via-[#0A0D14] to-transparent shrink-0">
+          <form onSubmit={handleSearch} className="max-w-4xl mx-auto relative group">
             <input 
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Message your RAG Semantic Agent..."
-              className="w-full bg-[#181F2E] border border-gray-700 flex text-white rounded-[24px] py-4.5 pl-6 pr-16 focus:outline-none focus:border-blue-500 focus:bg-[#1E273A] transition-all shadow-xl font-medium text-[15px] placeholder-gray-500"
+              className="w-full bg-[#181F2E] border border-gray-700 flex text-white rounded-[24px] py-4 pl-6 pr-16 focus:outline-none focus:border-blue-500 focus:bg-[#1E273A] transition-all shadow-xl font-medium text-[15px] placeholder-gray-500"
               style={{ minHeight: '60px' }}
             />
             <button 
