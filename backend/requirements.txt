@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+python-multipart
+tree-sitter
+tree-sitter-python
+sentence-transformers
+chromadb
+torch
