@@ -82,5 +82,6 @@ def process_upload(file: UploadFile) -> dict:
         
         return {
             "python_files_discovered": len(py_files),
-            "total_chunks": len(all_chunks)
+            "total_chunks": len(all_chunks),
+            "chunks": all_chunks
         }
