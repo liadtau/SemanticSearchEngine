@@ -6,3 +6,9 @@ tree-sitter-python
 sentence-transformers
 chromadb
 torch
+einops
+transformers
+accelerate
+pydantic
+httpx
+pytest
