@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routers import router as api_router
+from api.routes.upload import router as upload_router
+from api.routes.search import router as search_router
+from core.config import settings
 
-app = FastAPI(title="Semantic Code Search Engine")
+app = FastAPI(title=settings.PROJECT_NAME)
 
 # Add CORS middleware to allow localhost frontend to access the API
 app.add_middleware(
@@ -13,8 +15,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(api_router)
+app.include_router(upload_router)
+app.include_router(search_router)
 
 @app.get("/")
 def read_root():
-    return {"message": "Semantic Code Search Engine API is running"}
+    return {"message": f"{settings.PROJECT_NAME} API is running"}

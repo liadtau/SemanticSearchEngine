@@ -1,13 +1,14 @@
 import torch
 from transformers import pipeline
+from core.config import settings
 
-print("Loading LLM Model (TinyLlama-1.1B)...")
+print(f"Loading LLM Model ({settings.LLM_MODEL})...")
 # Using a quantized or smaller model capable of running locally
 device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
 
 pipe = pipeline(
     "text-generation", 
-    model="TinyLlama/TinyLlama-1.1B-Chat-v1.0", 
+    model=settings.LLM_MODEL, 
     device=device
 )
 print(f"LLM Model loaded on {device}!")

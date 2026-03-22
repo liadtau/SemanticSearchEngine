@@ -1,18 +1,14 @@
-import os
-import chromadb
-from sentence_transformers import SentenceTransformer
 from typing import List, Dict, Any
+from sentence_transformers import SentenceTransformer
+from core.config import settings
+from db.database import chroma_client
 
-# Resolve path for local ChromaDB storage
-CHROMA_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "chroma_data")
-
-# Initialize ChromaDB local client and specific collection
-chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
+# Initialize ChromaDB local collection using central client
 collection = chroma_client.get_or_create_collection(name="codebase")
 
 # Initialize Hugging Face Jina Embedding Model
 # We set trust_remote_code=True as instructed for jina models
-model = SentenceTransformer("jinaai/jina-embeddings-v2-base-code", trust_remote_code=True)
+model = SentenceTransformer(settings.EMBEDDING_MODEL, trust_remote_code=True)
 
 def index_chunks(chunks: List[Dict[str, Any]]):
     """Embeds and indexes code chunks in ChromaDB."""
