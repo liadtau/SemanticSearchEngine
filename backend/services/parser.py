@@ -2,6 +2,7 @@ import os
 import tree_sitter
 import tree_sitter_python
 from pathlib import Path
+from typing import List, Dict, Optional, Any
 
 # Initialize tree-sitter parser with python grammar
 try:
@@ -14,8 +15,19 @@ except Exception:
     PY_LANGUAGE = tree_sitter.Language(tree_sitter_python.language(), "python")
     parser.set_language(PY_LANGUAGE)
 
-def _walk_tree(node, relative_path: str, current_class: str = None, chunks: list = None) -> list:
-    """Recursively walks the AST to find classes and functions."""
+def _walk_tree(node: Any, relative_path: str, current_class: Optional[str] = None, chunks: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    """
+    Recursively walks the AST to find semantic blocks (classes and functions).
+    
+    Args:
+        node: The Tree-sitter node to start walking from.
+        relative_path: The path of the file relative to the repository root.
+        current_class: Name of the class if the node is within a class definition.
+        chunks: Accumulator list for the discovered code chunks.
+        
+    Returns:
+        List[Dict[str, Any]]: A list of chunks containing metadata and code snippets.
+    """
     if chunks is None:
         chunks = []
         
@@ -56,8 +68,17 @@ def _walk_tree(node, relative_path: str, current_class: str = None, chunks: list
             
     return chunks
 
-def chunk_python_file(file_path: str, root_dir: str) -> list[dict]:
-    """Reads a Python file and parses it into semantic chunks."""
+def chunk_python_file(file_path: str, root_dir: str) -> List[Dict[str, Any]]:
+    """
+    Reads a Python file, parses it via Tree-sitter, and returns semantic chunks.
+    
+    Args:
+        file_path: Absolute path to the source file.
+        root_dir: Root directory of the repository for path relativization.
+        
+    Returns:
+        List[Dict[str, Any]]: List of discovered class/function chunks.
+    """
     try:
         with open(file_path, 'rb') as f:
             source_code = f.read()

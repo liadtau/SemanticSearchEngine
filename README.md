@@ -1,23 +1,27 @@
 # Semantic Code Search Engine
 
-This project enables you to "talk" directly to a Python codebase using natural language. It ingests a compressed repository archive (`.zip` or `.tar` or `.tar.gz`), unpacks the AST to contextually chunk classes and methods, calculates local dense embeddings, and exposes a ChatGPT-style conversational UI to find logic seamlessly.
+"Semantic Search Engine" is a tool that allows you to "talk" directly to a Python codebase using natural language. 
 
-## Architectural Clarity
+It ingests a compressed repository archive (`.zip`, `.tar`, or `.tar.gz`), parses the Abstract Syntax Tree (AST) to extract classes and methods, calculates local dense embeddings, and exposes a ChatGPT-style conversational interface to help you search and understand the code seamlessly.
 
-> **Note:** The application was recently refactored from a monolithic 2-container setup into a clean **4-container microservice architecture**. This split was enacted strictly for structural clarity and modular scaling, proving that the orchestrator API layer remains devoid of dense Machine Learning binaries and local database states. Despite the professional-grade decoupling, running the environment locally remains remarkably simple.
+## How it Works
 
-### Architecture Decision: "Why 4 Containers?"
-While a 2-container layout technically achieves the home-assignment requirements seamlessly, binding stateful persistent storage (ChromaDB) and massive 1.1B parameter Large Language Models (TinyLlama) physically within the native Python memory space of a volatile API pipeline ultimately compromises horizontal scaling and local RAM footprint. 
-By cleanly separating the Database (`chroma`) and inference logic (`llm-inference`) behind explicit generic HTTP adapters, the `backend-api` acts as a pure execution orchestrator. This demonstrates standard production topography while leveraging simplistic local proxies that remain strictly lightweight enough for generic review execution.
+The application interacts via a fully decoupled microservice architecture:
 
-### Service Requirements
+1. **Frontend**: A React/TypeScript web app providing the conversational UI and file upload portal.
+2. **Backend API**: A FastAPI orchestration service that receives files, chunks code dynamically via Tree-sitter, and orchestrates searches without holding state.
+3. **Vector Database**: A ChromaDB server that persistently stores the AST embeddings.
+4. **LLM Inference**: A dedicated Python service running local Hugging Face text-generation (`TinyLlama`) and sentence embedding (`Jina`) models efficiently using PyTorch.
 
-1. **Frontend**: The UI only (TypeScript UI).
-2. **Stateless API**: FastAPI orchestration API running pure HTTP routes. Does *not* download or embed Hugging Face models natively.
-3. **Chroma Server**: Dedicated database persistence environment operating the structural intelligence maps via internal API networking.
-4. **LLM Inference Server**: Disconnected compute cluster designed strictly for loading, batching and processing large dense ML graphs (Jina + TinyLlama parameters).
+## Semantic Chunking with Tree-sitter
 
-### Service Diagram
+Unlike naive line-based chunkers, this engine uses **Tree-sitter** to parse the Abstract Syntax Tree (AST) of Python files. This allows the system to:
+- Identify exact boundaries of classes and functions.
+- Retain context by mapping code blocks to their logical parents.
+- Filter out comments and boilerplate effectively to maximize the LLM's context window efficiency.
+
+### Architecture Flow
+
 ```mermaid
 graph TD;
     User((User))-->|HTTP|Frontend[Frontend UI]
@@ -28,44 +32,47 @@ graph TD;
 
 ## Getting Started
 
-To ensure a reviewer-friendly experience, deployment is abstracted securely behind standard Make targets.
-
 ### Prerequisites
 - Docker & Docker Compose
 - Make
 
-### Execution (2 Commands)
+### Quick Start
+
+Booting the entire application is simple. From the root of the repository, simply run:
 
 ```bash
-# 1. Build the microservices cluster
-make build
-
-# 2. Boot the topology sequentially in the background
 make up
 ```
-The application will safely spin up. Open your browser to **http://localhost:5173** to reach the UI portal!
 
-### Environment Variables
-Configuration is driven gracefully via Docker Compose:
-- `CHROMA_HOST` / `CHROMA_PORT` / `COLLECTION_NAME`: Connects the backend purely to the vector space.
-- `LLM_BASE_URL`: URL mapping the backend to the `llm-inference` cluster endpoints (Default: `http://llm:8002`).
-- `EMBEDDING_MODEL_NAME`: HuggingFace AST Jina model mapped strictly to the inference module.
-- `LLM_MODEL_NAME`: Remote target mapped to TinyLlama conversational synthesis module.
+This single command will automatically build the necessary Docker images, spin down any old layers, and start the 4-container cluster sequentially in the background.
 
-## Architecture & Troubleshooting
+Once booted, open your browser and navigate to:
+**http://localhost:5173**
 
-**First-Time Boot Latency (Model Downloading):**
-The `llm-inference` container downloads the `TinyLlama` (1.1 Billion parameter) language model and the `Jina` embeddings dynamically upon its first task execution (the first time you upload an archive or trigger a search). This can take several minutes based on internet speeds. 
+### Environment Configuration
 
-**Wait for logs:** If the UI reports an error or times out instantly, check the inference download progress by tailing the logs:
+Configuration is passed through Docker Compose implicitly, mapping the services:
+- `CHROMA_HOST` / `CHROMA_PORT` / `COLLECTION_NAME`: Connects the API to the Chroma vector space.
+- `LLM_BASE_URL`: Maps the API natively to the Inference container.
+- `EMBEDDING_MODEL_NAME`: Defaults to `jinaai/jina-embeddings-v2-base-code`.
+- `LLM_MODEL_NAME`: Defaults to `TinyLlama/TinyLlama-1.1B-Chat-v1.0`.
+
+## Notes on First-Time Launch
+
+**Model Downloading:**
+The `llm-inference` container downloads the language and embedding models dynamically upon its first task execution (the first time you upload an archive or trigger a search). This can occasionally take a few minutes based on your network speed.
+
+If the UI ever times out during the very first search, simply check the download progress by tailing the logs:
 ```bash
 make logs
 ```
 
-The downloaded models will dynamically persist out to your host using the `semanticsearchengine_llm_cache` volume, guaranteeing lightning-fast cached boots upon subsequent `make up` commands.
+The downloaded models persist safely onto a Docker Volume (`semanticsearchengine_llm_cache`), guaranteeing lightning-fast cached boots upon any subsequent `make up` executions.
 
-### Useful Commands
-- `make logs`: Stream container cluster traces.
+## Useful Commands
+
+- `make up`: Build and boot the stack.
+- `make logs`: Stream all container logs.
 - `make down`: Halt the stack safely.
-- `make clean`: Erase all container states, image orphans, and clear vector and model cache named volumes securely.
-- `make backend-shell`: Secure bash drop into the API backend.
+- `make clean`: Erase all container states and clear vector/model cache named volumes.
+- `make backend-shell`: Drop into a secure bash shell inside the API backend.

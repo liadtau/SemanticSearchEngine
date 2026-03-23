@@ -3,19 +3,35 @@ import shutil
 import tempfile
 import zipfile
 import tarfile
-from typing import Union
+from typing import Union, Dict, Any
 from pathlib import Path
 from fastapi import UploadFile, HTTPException
 from services.parser import chunk_python_file
 
 def is_safe_path(base_dir: Union[str, Path], target_path: Union[str, Path]) -> bool:
-    """Ensure the target path is within the base directory to prevent path traversal."""
+    """
+    Ensure the target path is within the base directory to prevent path traversal attacks.
+    
+    Args:
+        base_dir: The root directory that should never be exited.
+        target_path: The requested path to check.
+        
+    Returns:
+        bool: True if safe, False otherwise.
+    """
     base_dir = Path(base_dir).resolve()
     target_str = str(target_path).lstrip('/')
     target_path = (base_dir / target_str).resolve()
     return target_path.is_relative_to(base_dir)
 
-def safe_extract_zip(archive_path: Union[str, Path], target_dir: Union[str, Path]):
+def safe_extract_zip(archive_path: Union[str, Path], target_dir: Union[str, Path]) -> None:
+    """
+    Safely extracts a ZIP archive while protecting against ZipSlip (path traversal).
+    
+    Args:
+        archive_path: Path to the .zip file.
+        target_dir: Directory where content should be extracted.
+    """
     target_dir = Path(target_dir)
     with zipfile.ZipFile(archive_path, 'r') as zip_ref:
         for member in zip_ref.namelist():
@@ -23,7 +39,14 @@ def safe_extract_zip(archive_path: Union[str, Path], target_dir: Union[str, Path
                 raise HTTPException(status_code=400, detail=f"Path traversal detected in zip archive: {member}")
         zip_ref.extractall(target_dir)
 
-def safe_extract_tar(archive_path: Union[str, Path], target_dir: Union[str, Path]):
+def safe_extract_tar(archive_path: Union[str, Path], target_dir: Union[str, Path]) -> None:
+    """
+    Safely extracts a TAR archive while protecting against path traversal.
+    
+    Args:
+        archive_path: Path to the .tar or .tar.gz file.
+        target_dir: Directory where content should be extracted.
+    """
     target_dir = Path(target_dir)
     with tarfile.open(archive_path, 'r:*') as tar_ref:
         for member in tar_ref.getmembers():
@@ -34,7 +57,20 @@ def safe_extract_tar(archive_path: Union[str, Path], target_dir: Union[str, Path
         # Python 3.12+ supports filter='data' but we do manual checks for broader compatibility
         tar_ref.extractall(target_dir)
 
-def process_upload(file: UploadFile) -> dict:
+def process_upload(file: UploadFile) -> Dict[str, Any]:
+    """
+    High-level orchestrator for processing an uploaded archive.
+    Saves the file, extracts it safely, scans for Python files, and chunks them.
+    
+    Args:
+        file: The UploadFile object from FastAPI.
+        
+    Returns:
+        Dict[str, Any]: A dictionary containing discovered file count and the list of chunks.
+        
+    Raises:
+        HTTPException: If the file type is invalid or processing fails.
+    """
     filename = file.filename or ""
     if not (filename.endswith('.zip') or filename.endswith('.tar.gz') or filename.endswith('.tar') or filename.endswith('.tgz')):
         raise HTTPException(status_code=400, detail="Invalid file type. Only .zip and .tar.gz are supported.")

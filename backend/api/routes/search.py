@@ -10,10 +10,20 @@ logger.setLevel(logging.INFO)
 router = APIRouter()
 
 @router.post("/api/search", response_model=SearchResponseModel)
-async def search(query: SearchQuery):
+async def search(query: SearchQuery) -> SearchResponseModel:
     """
     Endpoint for querying the codebase using natural language.
-    Synthesizes the LLM reply using augmented chunks.
+    
+    This function orchestrates:
+    1. Query embedding generation via the LLM service.
+    2. Semantic search in ChromaDB.
+    3. Retrieval-Augmented Generation (RAG) to synthesize a final answer.
+    
+    Args:
+        query: SearchQuery containing the user's natural language question.
+        
+    Returns:
+        SearchResponseModel: The synthesized agent reply along with relevant code references.
     """
     logger.info(f"Search query received: '{query.query}'")
     # Create remote embedding

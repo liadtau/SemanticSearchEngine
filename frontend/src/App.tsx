@@ -84,9 +84,10 @@ export default function App() {
       const data = res.data
       setUploadState('success')
       setUploadMessage(`Success! Indexed ${data.python_files_discovered} files and ${data.total_chunks} chunks.`)
-    } catch (e: any) {
+    } catch (e: unknown) {
       setUploadState('error')
-      setUploadMessage(e?.response?.data?.detail || "Error uploading and processing file.")
+      const errorMessage = e instanceof Error ? e.message : "Error uploading and processing file."
+      setUploadMessage(errorMessage)
     }
   }
 
@@ -110,10 +111,11 @@ export default function App() {
         content,
         references: data.references || (data.results || [])
       }])
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : 'unknown error'
       setMessages(prev => [...prev, { 
         role: 'agent', 
-        content: `Error searching the codebase: ${e.message || 'unknown error'}`,
+        content: `Error searching the codebase: ${errorMessage}`,
         references: []
       }])
     } finally {
@@ -242,7 +244,7 @@ export default function App() {
                         <div className="prose prose-invert max-w-none text-[15px] font-medium leading-relaxed text-gray-200">
                           <ReactMarkdown
                             components={{
-                              code({node, inline, className, children, ...props}: any) {
+                              code({inline, className, children, ...props}: {inline?: boolean, className?: string, children?: React.ReactNode}) {
                                 const match = /language-(\w+)/.exec(className || '')
                                 return !inline && match ? (
                                   <SyntaxHighlighter
