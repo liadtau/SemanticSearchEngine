@@ -56,11 +56,11 @@ export default function App() {
     setDragActive(false)
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const f = e.dataTransfer.files[0]
-      if (f.name.endsWith('.zip') || f.name.endsWith('.tar.gz') || f.name.endsWith('.tar')) {
+      if (f.name.endsWith('.zip') || f.name.endsWith('.tar.gz') || f.name.endsWith('.tar') || f.name.endsWith('.tgz')) {
         setFile(f)
       } else {
         setUploadState('error')
-        setUploadMessage('Invalid file type. Please upload .zip or .tar.gz')
+        setUploadMessage('Invalid file type. Please upload .zip, .tar, or .tar.gz')
       }
     }
   }, [])
@@ -146,7 +146,7 @@ export default function App() {
             type="file" 
             id="file-upload"
             className="hidden"
-            accept=".zip,.tar,.tar.gz"
+            accept=".zip, .tar, .tar.gz, .tgz, application/zip, application/x-zip-compressed, application/gzip, application/x-tar, application/x-tgz"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
           />
           <label htmlFor="file-upload" className="bg-[#1C2333] hover:bg-[#252D40] text-sm px-5 py-2.5 rounded-full cursor-pointer transition-all border border-gray-700/50 font-medium text-gray-300 shadow-sm">

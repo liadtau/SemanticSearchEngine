@@ -11,7 +11,8 @@ from services.parser import chunk_python_file
 def is_safe_path(base_dir: Union[str, Path], target_path: Union[str, Path]) -> bool:
     """Ensure the target path is within the base directory to prevent path traversal."""
     base_dir = Path(base_dir).resolve()
-    target_path = (base_dir / target_path).resolve()
+    target_str = str(target_path).lstrip('/')
+    target_path = (base_dir / target_str).resolve()
     return target_path.is_relative_to(base_dir)
 
 def safe_extract_zip(archive_path: Union[str, Path], target_dir: Union[str, Path]):
@@ -26,6 +27,7 @@ def safe_extract_tar(archive_path: Union[str, Path], target_dir: Union[str, Path
     target_dir = Path(target_dir)
     with tarfile.open(archive_path, 'r:*') as tar_ref:
         for member in tar_ref.getmembers():
+            member.name = member.name.lstrip('/')
             if not is_safe_path(target_dir, member.name):
                 raise HTTPException(status_code=400, detail=f"Path traversal detected in tar archive: {member.name}")
         

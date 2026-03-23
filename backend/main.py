@@ -1,8 +1,14 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.routes.upload import router as upload_router
 from api.routes.search import router as search_router
 from core.config import settings
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 app = FastAPI(title=settings.PROJECT_NAME)
 

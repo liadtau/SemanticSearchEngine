@@ -1,25 +1,46 @@
-version: '3.8'
-
 services:
-  backend:
-    build: 
-      context: ./backend
-    ports:
-      - "8000:8000"
-    volumes:
-      - chroma_data:/app/chroma_data
-    environment:
-      - PYTHONUNBUFFERED=1
-    
   frontend:
-    build:
-      context: ./frontend
+    build: ./frontend
     ports:
       - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
     depends_on:
       - backend
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
     environment:
-      - CHOKIDAR_USEPOLLING=true
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+      - COLLECTION_NAME=codebase
+      - LLM_BASE_URL=http://llm:8002
+    depends_on:
+      chroma:
+        condition: service_started
+      llm:
+        condition: service_healthy
+
+  chroma:
+    image: chromadb/chroma:latest
+    volumes:
+      - chroma_data:/chroma/chroma/
+
+  llm:
+    build: ./llm-inference
+    environment:
+      - EMBEDDING_MODEL_NAME=jinaai/jina-embeddings-v2-base-code
+      - LLM_MODEL_NAME=TinyLlama/TinyLlama-1.1B-Chat-v1.0
+    volumes:
+      - llm_cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   chroma_data:
+  llm_cache:

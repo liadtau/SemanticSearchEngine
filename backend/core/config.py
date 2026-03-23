@@ -1,12 +1,12 @@
 import os
 
 class Settings:
-    PROJECT_NAME: str = "Semantic Code Search Engine"
+    PROJECT_NAME: str = "Semantic Code Search Engine API"
     
-    # Resolve path for local ChromaDB storage
-    CHROMA_PATH: str = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "chroma_data")
+    CHROMA_HOST: str = os.getenv("CHROMA_HOST", "chroma")
+    CHROMA_PORT: int = int(os.getenv("CHROMA_PORT", "8000"))
+    COLLECTION_NAME: str = os.getenv("COLLECTION_NAME", "codebase")
     
-    EMBEDDING_MODEL: str = "jinaai/jina-embeddings-v2-base-code"
-    LLM_MODEL: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-    
+    LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "http://llm:8002")
+
 settings = Settings()
