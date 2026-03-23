@@ -49,6 +49,10 @@ This single command will automatically build the necessary Docker images, spin d
 Once booted, open your browser and navigate to:
 **http://localhost:5173**
 
+### Test application
+Under `dataset` directory you can find a 'Vampi' - a Python project as zip/tar/gz file of a python project. Upload it to the application and ask questions about the code.
+In addition to that, use LightRAG zip for a large repository (76,391 lines in .py files)
+
 ### Environment Configuration
 
 Configuration is passed through Docker Compose implicitly, mapping the services:
